@@ -15,11 +15,13 @@ class AntivistAPIError(AntivistError):
         status_code: int,
         code: str | None = None,
         message: str | None = None,
+        details=None,
         response_body=None,
     ):
         self.status_code = status_code
         self.code = code
         self.message = message
+        self.details = details
         self.response_body = response_body
 
         error_message = f"Antivist API error ({status_code})"
