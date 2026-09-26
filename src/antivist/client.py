@@ -11,7 +11,8 @@ from .signing import (
     sign_request,
 )
 
-from .exceptions import AntivistAPIError
+from .exceptions import AntivistAPIError, AntivistError
+from .models import ConditionalExit
 
 
 class AntivistClient:
@@ -105,6 +106,7 @@ class AntivistClient:
 
             error_code = None
             error_message = None
+            error_details = None
 
             if isinstance(response_body, dict):
                 error = response_body.get("error")
@@ -112,11 +114,13 @@ class AntivistClient:
                 if isinstance(error, dict):
                     error_code = error.get("code")
                     error_message = error.get("message")
+                    error_details = error.get("details")
 
             raise AntivistAPIError(
                 status_code=response.status_code,
                 code=error_code,
                 message=error_message,
+                details=error_details,
                 response_body=response_body,
             )
 
@@ -302,3 +306,99 @@ class AntivistClient:
             "GET",
             "/api/trading-accounts/risk/",
         )
+
+    def create_conditional_exits(
+        self,
+        *,
+        parent_order_id: int,
+        take_profit: str | None = None,
+        stop_loss: str | None = None,
+    ) -> list[ConditionalExit]:
+        """
+        Create one or both server-managed conditional exits for a parent order.
+        """
+        if take_profit is None and stop_loss is None:
+            raise AntivistError(
+                "At least one of take_profit or stop_loss must be provided."
+            )
+
+        body = {"parent_order_id": parent_order_id}
+
+        if take_profit is not None:
+            body["take_profit"] = {"trigger_price": take_profit}
+
+        if stop_loss is not None:
+            body["stop_loss"] = {"trigger_price": stop_loss}
+
+        response = self._request(
+            "POST",
+            "/api/match-engine/conditional-exits/",
+            json_body=body,
+        )
+
+        return [
+            ConditionalExit.from_api(item)
+            for item in response["conditional_exits"]
+        ]
+
+    def list_conditional_exits(
+        self,
+        *,
+        market_id: int | None = None,
+        status: str | None = None,
+        parent_order_id: int | None = None,
+    ) -> list[ConditionalExit]:
+        """
+        Return conditional exits, optionally filtered by supported REST params.
+        """
+        params = {}
+
+        if market_id is not None:
+            params["market_id"] = market_id
+
+        if status is not None:
+            params["status"] = status
+
+        if parent_order_id is not None:
+            params["parent_order_id"] = parent_order_id
+
+        response = self._request(
+            "GET",
+            "/api/match-engine/conditional-exits/",
+            params=params or None,
+        )
+
+        return [
+            ConditionalExit.from_api(item)
+            for item in response["conditional_exits"]
+        ]
+
+    def get_conditional_exit(
+        self,
+        *,
+        conditional_exit_id: int,
+    ) -> ConditionalExit:
+        """
+        Return one conditional exit owned by the authenticated account.
+        """
+        response = self._request(
+            "GET",
+            f"/api/match-engine/conditional-exits/{conditional_exit_id}/",
+        )
+
+        return ConditionalExit.from_api(response["conditional_exit"])
+
+    def cancel_conditional_exit(
+        self,
+        *,
+        conditional_exit_id: int,
+    ) -> ConditionalExit:
+        """
+        Cancel one cancelable conditional exit.
+        """
+        response = self._request(
+            "DELETE",
+            f"/api/match-engine/conditional-exits/{conditional_exit_id}/",
+        )
+
+        return ConditionalExit.from_api(response["conditional_exit"])
