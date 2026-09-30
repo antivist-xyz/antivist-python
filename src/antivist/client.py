@@ -21,7 +21,7 @@ class AntivistClient:
         base_url: str,
         api_key: str,
         api_secret: str,
-        timeout: float = 10.0,
+        timeout: float = 30.0,
     ):
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
