@@ -163,6 +163,16 @@ class AntivistClient:
             json_body=body,
         )
 
+    def submit_orders(self, orders: list[dict]):
+        """
+        Submit multiple orders in a single request.
+        """
+        return self._request(
+            "POST",
+            "/api/match-engine/orders/batch-submit/",
+            json_body={"orders": orders},
+        )
+
     def get_orders(self):
         """
         Return the authenticated trading account's open orders.
@@ -179,6 +189,16 @@ class AntivistClient:
         return self._request(
             "POST",
             f"/api/match-engine/orders/{order_id}/cancel/",
+        )
+
+    def cancel_orders(self, order_ids: list[int]):
+        """
+        Cancel multiple orders in a single request.
+        """
+        return self._request(
+            "POST",
+            "/api/match-engine/orders/batch-cancel/",
+            json_body={"order_ids": order_ids},
         )
 
     def cancel_all_orders(self):

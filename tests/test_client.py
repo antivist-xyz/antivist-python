@@ -195,6 +195,87 @@ def test_submit_order_calls_orders_endpoint():
         "status": "ACCEPTED",
     }    
 
+
+def test_submit_orders_sends_one_signed_batch_request_and_returns_response():
+    api_secret = "test-secret"
+    captured_requests = []
+    orders = [
+        {
+            "market_id": 5,
+            "side": "BUY",
+            "price": "997.50",
+            "quantity": "1.000",
+            "leverage": "1.00",
+            "client_order_id": "viktor-a",
+        },
+        {
+            "market_id": 5,
+            "side": "SELL",
+            "price": "1002.00",
+            "quantity": "1.000",
+            "leverage": "1.00",
+            "client_order_id": "viktor-b",
+        },
+    ]
+    backend_response = {
+        "results": [
+            {
+                "index": 0,
+                "client_order_id": "viktor-a",
+                "order_id": 101,
+                "ok": True,
+                "order": {"order_id": 101, "status": "OPEN"},
+            },
+            {
+                "index": 1,
+                "client_order_id": "viktor-b",
+                "order_id": None,
+                "ok": False,
+                "error": {"code": "INVALID_ORDER"},
+            },
+        ]
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured_requests.append(request)
+        parsed_url = urlparse(str(request.url))
+        canonical_request = build_canonical_request(
+            method=request.method,
+            path=parsed_url.path,
+            query_string=parsed_url.query,
+            timestamp=request.headers["X-Antivist-Timestamp"],
+            nonce=request.headers["X-Antivist-Nonce"],
+            body_sha256=sha256_body(request.content),
+        )
+
+        assert request.headers["X-Antivist-Signature"] == sign_request(
+            api_secret=api_secret,
+            canonical_request=canonical_request,
+        )
+
+        return httpx.Response(200, json=backend_response)
+
+    client = AntivistClient(
+        base_url="https://testnet.antivist.xyz",
+        api_key="antv_test",
+        api_secret=api_secret,
+    )
+    client._http.close()
+    client._http = httpx.Client(
+        base_url=client.base_url,
+        timeout=client.timeout,
+        transport=httpx.MockTransport(handler),
+    )
+
+    response = client.submit_orders(orders)
+
+    assert len(captured_requests) == 1
+    request = captured_requests[0]
+    assert request.method == "POST"
+    assert request.url.path == "/api/match-engine/orders/batch-submit/"
+    assert json.loads(request.content) == {"orders": orders}
+    assert response == backend_response
+
 def test_request_raises_antivist_api_error():
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(
@@ -340,6 +421,73 @@ def test_cancel_order_calls_cancel_endpoint():
             "status": "CANCELED",
         },
     }        
+
+
+def test_cancel_orders_sends_one_signed_batch_request_and_returns_response():
+    api_secret = "test-secret"
+    captured_requests = []
+    backend_response = {
+        "results": [
+            {
+                "index": 0,
+                "order_id": 101,
+                "ok": True,
+                "order": {"order_id": 101, "status": "CANCELED"},
+            },
+            {
+                "index": 1,
+                "order_id": 102,
+                "ok": False,
+                "error": {"code": "ORDER_NOT_FOUND"},
+            },
+            {
+                "index": 2,
+                "order_id": 103,
+                "ok": True,
+                "order": {"order_id": 103, "status": "CANCELED"},
+            },
+        ]
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured_requests.append(request)
+        parsed_url = urlparse(str(request.url))
+        canonical_request = build_canonical_request(
+            method=request.method,
+            path=parsed_url.path,
+            query_string=parsed_url.query,
+            timestamp=request.headers["X-Antivist-Timestamp"],
+            nonce=request.headers["X-Antivist-Nonce"],
+            body_sha256=sha256_body(request.content),
+        )
+
+        assert request.headers["X-Antivist-Signature"] == sign_request(
+            api_secret=api_secret,
+            canonical_request=canonical_request,
+        )
+
+        return httpx.Response(200, json=backend_response)
+
+    client = AntivistClient(
+        base_url="https://testnet.antivist.xyz",
+        api_key="antv_test",
+        api_secret=api_secret,
+    )
+    client._http.close()
+    client._http = httpx.Client(
+        base_url=client.base_url,
+        timeout=client.timeout,
+        transport=httpx.MockTransport(handler),
+    )
+
+    response = client.cancel_orders([101, 102, 103])
+
+    assert len(captured_requests) == 1
+    request = captured_requests[0]
+    assert request.method == "POST"
+    assert request.url.path == "/api/match-engine/orders/batch-cancel/"
+    assert json.loads(request.content) == {"order_ids": [101, 102, 103]}
+    assert response == backend_response
 
 def test_cancel_all_orders_calls_cancel_all_endpoint():
     captured_request = {}
@@ -992,4 +1140,4 @@ def test_get_market_preserves_polymarket_oracle_sources():
         response["oracle_sources"]["polymarket"]["markets"][0]
         ["outcomes"][2]["token_id"]
         == "token-juventus"
-    )        
+    )
