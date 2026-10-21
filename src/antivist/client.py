@@ -300,6 +300,15 @@ class AntivistClient:
             f"/api/markets/{slug}/",
         )
 
+    def get_market_mark(self, slug: str):
+        """
+        Return the persisted mark price and its metadata.
+        """
+        return self._request(
+            "GET",
+            f"/api/markets/{slug}/mark/",
+        )
+
     def get_order_book(self, market_id: int):
         """
         Return the current order book for a market.
