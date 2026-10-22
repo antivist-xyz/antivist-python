@@ -173,13 +173,27 @@ class AntivistClient:
             json_body={"orders": orders},
         )
 
-    def get_orders(self):
+    def get_orders(self, market_id: int | None = None):
         """
         Return the authenticated trading account's open orders.
+        Optionally filter by market.
         """
+        if market_id is not None:
+            if (
+                not isinstance(market_id, int)
+                or isinstance(market_id, bool)
+                or market_id <= 0
+            ):
+                raise ValueError("market_id must be a positive integer")
+
         return self._request(
             "GET",
             "/api/match-engine/orders/",
+            params=(
+                {"market_id": market_id}
+                if market_id is not None
+                else None
+            ),
         )
 
     def cancel_order(self, order_id: int):
